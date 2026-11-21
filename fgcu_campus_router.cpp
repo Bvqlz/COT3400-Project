@@ -53,9 +53,9 @@ bool parseLine(const char* line, EdgeRecord& out) {
 
 class Graph {
     private:
-        GraphNode graph[100]; // this holds the various vertices of the graph.
-        int vertexCount = 0; // keeps track of the number of vertices in the graph // is this necessary? Can we not use the size of the graph array?
-
+        static const int MAX_VERTICES = 100; // the most vertices graph[] can hold
+        GraphNode graph[MAX_VERTICES]; // this holds the various vertices of the graph.
+        int vertexCount = 0; // keeps track of the number of vertices in the graph 
         std::vector<std::string> intersectionNames; // holds sorted intersection names for binary search
         std::vector<double> distances; // holds the distances from the start vertex to each vertex (of a particular route search)
         std::vector<int> previous; // holds the previous vertex index for each vertex in the shortest path (of a particular route search)
@@ -78,7 +78,10 @@ class Graph {
                     continue;
                 }
 
+                // keep both ends of the edge so a place that only shows up as a To still becomes a vertex
+                // this gives 2 names per line and duplicates are removed after sorting
                 intersectionNames.push_back(std::string(record.From)); // convert c-style string to std::string and add to vector
+                intersectionNames.push_back(std::string(record.To));
             }
 
             fclose(txt);
@@ -156,19 +159,46 @@ class Graph {
             return -1; // return -1 if not found
         }
 
-        // adds vertices to the graph based on the sorted intersection names
-        void addVerticies() {
-            for(int i = 0; i < intersectionNames.size(); i++) {
-                
-                // this simple check can be done because our vector is sorted
-                if(i > 0 && intersectionNames[i] == intersectionNames[i - 1]) {
-                    continue;
-                }
+        // removes repeated names from the sorted intersectionNames in one pass
+        // keep is how many unique names we have so far and where the next one goes
+        void removeDuplicates() {
+            int keep = 0;
 
-                strcpy(graph[vertexCount].IntersectionName, intersectionNames[i].c_str()); // changes our string to a char array
-                graph[vertexCount].AdjVertexList = nullptr;
-                vertexCount++;
+            for(int i = 0; i < (int)intersectionNames.size(); i++) {
+                // only keep a name if it differs from the last one we kept
+                // this works because the sort put equal names next to each other
+                if(keep == 0 || intersectionNames[i] != intersectionNames[keep - 1]) {
+                    intersectionNames[keep] = intersectionNames[i];
+                    keep++;
+                }
             }
+
+            intersectionNames.resize(keep); // drop the leftover slots at the end
+        }
+
+        // adds vertices to the graph from the sorted intersection names
+        void addVerticies() {
+            // graph[] has a fixed size
+            if((int)intersectionNames.size() > MAX_VERTICES) {
+                std::cout << "Error too many locations (" << intersectionNames.size() << ") the limit is " << MAX_VERTICES << std::endl;
+                return;
+            }
+
+            for(int i = 0; i < (int)intersectionNames.size(); i++) {
+                strcpy(graph[i].IntersectionName, intersectionNames[i].c_str()); // changes our string to a char array
+                graph[i].AdjVertexList = nullptr;
+            }
+
+            vertexCount = intersectionNames.size(); // V is the number of unique names
+        }
+
+        // builds the sorted vertex list V from the file
+        // sorting has to happen before removeDuplicates so equal names sit side by side
+        void buildVertexList(const char* fileName) {
+            processFile(fileName);
+            MergeSort(intersectionNames, 0, (int)intersectionNames.size() - 1);
+            removeDuplicates();
+            addVerticies();
         }
 
         void addEdges(const char* fileName) {
@@ -354,9 +384,7 @@ int main(int argc, char* argv[]) {
     const char* fileName = (argc > 1) ? argv[1] : "fgcu_campus.csv";
 
     Graph graph;
-    graph.processFile(fileName);
-    graph.MergeSort(graph.getIntersectionNames(), 0, graph.getIntersectionNames().size() - 1);
-    graph.addVerticies();
+    graph.buildVertexList(fileName);
     graph.addEdges(fileName);
     graph.userInput();
 

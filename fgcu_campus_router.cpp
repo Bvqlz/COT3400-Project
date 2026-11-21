@@ -1,16 +1,17 @@
 #include <iostream>
-#include <vector> 
+#include <vector>
 #include <queue>
 #include <climits>
 #include <cstring>
+#include <cstdio>   
+#include <string>
 #include <algorithm>
 
 struct VertexListNode {
     char ToIntersectionName[80];
-    char StreetName[80];
     char Direction[20];
     double Distance;
-    int SpeedLimit;
+    double SpeedLimit;
     int toIndex; // this holds the index of the vertex this edge points to. Allows for faster lookup during Dijkstra's algorithm
     VertexListNode* next;
 };
@@ -19,6 +20,35 @@ struct GraphNode {
     char IntersectionName[80];
     VertexListNode* AdjVertexList;
 };
+
+// fields for each edge in fgcu_campus.csv 
+struct EdgeRecord {
+    char From[80];
+    char To[80];
+    char Heading[20];
+    double Distance; 
+    double Speed;
+};
+
+// parses one line of the csv into out with a single sscanf call
+// returns false for blank or malformed lines so the caller can just skip them
+// a simple parse like this will fail on negative distances, empty fields, or other malformed data. It is assumed that the input data is well formatted. 
+bool parseLine(const char* line, EdgeRecord& out) {
+    // the leading space skips any whitespace before the first quote
+    // \" matches a literal quote and the commas match literal commas
+    // %79[^\"] reads up to 79 chars that are not a quote
+    // 79 leaves room for the '\0' in an 80 char array and 19 does the same for Heading
+    // %lf reads a double for Distance and Speed
+    int n = sscanf(line, " \"%79[^\"]\",\"%79[^\"]\",\"%19[^\"]\",%lf,%lf", out.From, out.To, out.Heading, &out.Distance, &out.Speed);
+
+    // sscanf returns how many fields it filled so 5 means a full line
+    // a blank line returns EOF and a bad line stops early with fewer than 5
+    if(n != 5) {
+        return false;
+    }
+
+    return true;
+}
 
 
 class Graph {
@@ -41,22 +71,14 @@ class Graph {
             }
 
             while(fgets(line, sizeof(line), txt)) {
-                char intersectionName[80];
-                int i = 0; // index for iterating through line
-                int j = 0; // index for building each intersectionName
+                EdgeRecord record;
 
-                while(line[i] == ' ' || line[i] == '\t') {
-                    i++; // skip leading whitespace
+                // parseLine does all the work of pulling the quoted fields apart. blank/bad lines are skipped
+                if(!parseLine(line, record)) {
+                    continue;
                 }
 
-                // these are various terminals that indicate the end of a token
-                while(line[i] != ' ' && line[i] != '\t' && line[i] != '\0' && line[i] != '\n') {
-                    intersectionName[j++] = line[i++];
-                }
-
-                intersectionName[j] = '\0'; // null terminate the string
-
-                intersectionNames.push_back(std::string(intersectionName)); // convert c-style string to std::string and add to vector
+                intersectionNames.push_back(std::string(record.From)); // convert c-style string to std::string and add to vector
             }
 
             fclose(txt);
@@ -159,15 +181,17 @@ class Graph {
             }
 
             while(fgets(line, sizeof(line), txt)) {
-                char fromIntersection[80];
-                char streetName[80];
-                char toIntersection[80];
-                char direction[20];
-                double distance;
-                int speed;
+                EdgeRecord record;
 
-                //parse the line to extract the data
-                sscanf(line, "%s %s %s %s %lf %i", fromIntersection, streetName, toIntersection, direction, &distance, &speed);
+                if(!parseLine(line, record)) {
+                    continue; // skip blank or malformed lines
+                }
+
+                const char* fromIntersection = record.From;
+                const char* toIntersection = record.To;
+                const char* direction = record.Heading;
+                double distance = record.Distance;
+                double speed = record.Speed;
 
                 int fromIndex = binarySearch(fromIntersection);
                 int toIndex = binarySearch(toIntersection);
@@ -180,7 +204,6 @@ class Graph {
                 //create a new VertexListNode
                 VertexListNode* newNode = new VertexListNode();
                 strcpy(newNode->ToIntersectionName, toIntersection);
-                strcpy(newNode->StreetName, streetName);
                 strcpy(newNode->Direction, direction);
                 newNode->Distance = distance;
                 newNode->SpeedLimit = speed;
@@ -200,7 +223,7 @@ class Graph {
                     current->next = newNode;
                     // continue;
                 }
-                
+
             }
 
             fclose(txt);
@@ -273,7 +296,7 @@ class Graph {
                 while(edge) {
                     
                     if(edge->toIndex == toVertex) {
-                        std::cout << " Take " << edge->StreetName << " " << edge->Direction << " to " << edge->ToIntersectionName << " " << edge->Distance << std::endl;
+                        std::cout << " Take " << edge->Direction << " to " << edge->ToIntersectionName << " " << edge->Distance << std::endl;
                         
                         totalDistance += edge->Distance;
                         totalTime += edge->Distance / edge->SpeedLimit;
@@ -326,12 +349,15 @@ class Graph {
         }
 };
 
-int main() {
+int main(int argc, char* argv[]) {
+    // the map file can be passed on the command line (e.g. ./router other_map.csv), otherwise we use the default
+    const char* fileName = (argc > 1) ? argv[1] : "fgcu_campus.csv";
+
     Graph graph;
-    graph.processFile("HW3mapcampus.txt");
+    graph.processFile(fileName);
     graph.MergeSort(graph.getIntersectionNames(), 0, graph.getIntersectionNames().size() - 1);
     graph.addVerticies();
-    graph.addEdges("HW3mapcampus.txt");
+    graph.addEdges(fileName);
     graph.userInput();
 
     return 0;

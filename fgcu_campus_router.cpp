@@ -52,6 +52,25 @@ bool parseLine(const char* line, EdgeRecord& out) {
     return true;
 }
 
+// removes leading and trailing spaces, tabs and \r from a line of user input
+// the \r can show up when input comes from a file with Windows line endings
+std::string trimLine(const std::string& text) {
+    int start = 0;
+    int end = (int)text.size() - 1;
+
+    // move start forward past any blanks at the front
+    while(start <= end && (text[start] == ' ' || text[start] == '\t' || text[start] == '\r')) {
+        start++;
+    }
+
+    // move end backward past any blanks at the back
+    while(end >= start && (text[end] == ' ' || text[end] == '\t' || text[end] == '\r')) {
+        end--;
+    }
+
+    return text.substr(start, end - start + 1); // an all blank line gives an empty string
+}
+
 
 class Graph {
     private:
@@ -361,40 +380,90 @@ class Graph {
             std::cout << "Route priority: " << (showTime ? "Fastest Time" : "Shortest Distance") << std::endl;
         }
 
+        // asks for a location until the name matches a known vertex
+        // returns the vertex index or -1 if the user quits or input runs out
+        // allowQuit lets q or an empty line end the session from this prompt
+        int promptForLocation(const char* label, bool allowQuit) {
+            while(true) {
+                std::cout << label;
+
+                // getline reads the whole line so names with spaces work
+                std::string input;
+                if(!std::getline(std::cin, input)) {
+                    return -1; // end of input so stop asking
+                }
+                input = trimLine(input);
+
+                if(allowQuit && (input.empty() || input == "q")) {
+                    return -1;
+                }
+
+                if(input.empty()) {
+                    std::cout << "Please enter a location" << std::endl;
+                    continue;
+                }
+
+                int index = binarySearch(input.c_str());
+                if(index != -1) {
+                    return index;
+                }
+
+                // keep asking until the name matches a known location
+                std::cout << "Unknown location '" << input << "', try again" << std::endl;
+            }
+        }
+
+        // asks for the route type until the user enters 0 or 1
+        // returns 0 for shortest and 1 for fastest or -1 if input runs out
+        int promptForRouteType() {
+            while(true) {
+                std::cout << "Choose path type (0 shortest distance, 1 fastest time): ";
+
+                std::string input;
+                if(!std::getline(std::cin, input)) {
+                    return -1; // end of input so stop asking
+                }
+                input = trimLine(input);
+
+                if(input == "0") {
+                    return 0;
+                }
+                if(input == "1") {
+                    return 1;
+                }
+
+                std::cout << "Please enter 0 or 1" << std::endl;
+            }
+        }
+
+        // runs route queries until the user quits or input runs out
         void userInput() {
-            std::cout << "Enter starting intersection: ";
-            char startIntersection[80];
-            
-            if(!(std::cin >> startIntersection)) {
-                std::cout << "Invalid input." << std::endl;
-                return;
-            }
+            while(true) {
+                int startIndex = promptForLocation("Enter starting intersection (q to quit): ", true);
+                if(startIndex == -1) {
+                    return;
+                }
 
-            std::cout << "Enter destination intersection: ";
-            char endIntersection[80];
-            if(!(std::cin >> endIntersection)) {
-                std::cout << "Invalid input." << std::endl;
-                return;
-            }
+                int endIndex = promptForLocation("Enter destination intersection: ", false);
+                if(endIndex == -1) {
+                    return;
+                }
 
-            std::cout << "Choose path type (0 shortest distance, 1 fastest time): ";
-            int pathType;
-            if(!(std::cin >> pathType) || (pathType != 0 && pathType != 1)) {
-                std::cout << "Invalid input." << std::endl;
-                return;
-            }
+                int pathType = promptForRouteType();
+                if(pathType == -1) {
+                    return;
+                }
 
-            int startIndex = binarySearch(startIntersection);
-            int endIndex = binarySearch(endIntersection);
+                // a route to the same place has nothing to compute
+                if(startIndex == endIndex) {
+                    std::cout << "Start and destination are the same location" << std::endl << std::endl;
+                    continue;
+                }
 
-            
-            if(startIndex == -1 || endIndex == -1) {
-                std::cout << "Invalid intersection" << std::endl;
-                return;
+                dijkstra(startIndex, pathType);
+                printDirections(startIndex, endIndex, pathType);
+                std::cout << std::endl; // blank line before the next query
             }
-            
-            dijkstra(startIndex, pathType);
-            printDirections(startIndex, endIndex, pathType);
         }
 };
 

@@ -7,18 +7,20 @@
 #include <string>
 #include <algorithm>
 
+// one edge in a vertex's adjacency list
+// the from vertex is whichever list this node sits in
 struct VertexListNode {
-    char ToIntersectionName[80];
-    char Direction[20];
-    double Distance;
-    double SpeedLimit;
-    int toIndex; // this holds the index of the vertex this edge points to. Allows for faster lookup during Dijkstra's algorithm
+    int toIndex; // this holds the index of the vertex this edge points to
+    char Heading[20];
+    double Distance; 
+    double Speed; 
     VertexListNode* next;
 };
 
 struct GraphNode {
     char IntersectionName[80];
-    VertexListNode* AdjVertexList;
+    VertexListNode* AdjVertexList; // head of this vertex's edge list
+    VertexListNode* AdjVertexTail; // last node in the list so appending does not need a walk
 };
 
 // fields for each edge in fgcu_campus.csv 
@@ -61,6 +63,20 @@ class Graph {
         std::vector<int> previous; // holds the previous vertex index for each vertex in the shortest path (of a particular route search)
 
     public:
+        // deconstructor 
+        ~Graph() {
+            for(int i = 0; i < vertexCount; i++) {
+                VertexListNode* current = graph[i].AdjVertexList;
+                while(current) {
+                    VertexListNode* nextNode = current->next; // save next before deleting the node that holds it
+                    delete current;
+                    current = nextNode;
+                }
+                graph[i].AdjVertexList = nullptr;
+                graph[i].AdjVertexTail = nullptr;
+            }
+        }
+
         void processFile(const char* fileName) {
             FILE* txt;
             char line[256];
@@ -191,6 +207,7 @@ class Graph {
             for(int i = 0; i < (int)intersectionNames.size(); i++) {
                 strcpy(graph[i].IntersectionName, intersectionNames[i].c_str()); // changes our string to a char array
                 graph[i].AdjVertexList = nullptr;
+                graph[i].AdjVertexTail = nullptr; // empty list so there is no tail yet
             }
 
             vertexCount = intersectionNames.size(); // V is the number of unique names
@@ -223,7 +240,7 @@ class Graph {
 
                 const char* fromIntersection = record.From;
                 const char* toIntersection = record.To;
-                const char* direction = record.Heading;
+                const char* heading = record.Heading;
                 double distance = record.Distance;
                 double speed = record.Speed;
 
@@ -237,25 +254,23 @@ class Graph {
 
                 //create a new VertexListNode
                 VertexListNode* newNode = new VertexListNode();
-                strcpy(newNode->ToIntersectionName, toIntersection);
-                strcpy(newNode->Direction, direction);
+                newNode->toIndex = toIndex; // the destination name comes from graph using toIndex
+                strcpy(newNode->Heading, heading);
                 newNode->Distance = distance;
-                newNode->SpeedLimit = speed;
-                newNode->toIndex = toIndex;
+                newNode->Speed = speed;
                 newNode->next = nullptr;
 
                 //always check if the linked list is empty
                 if(graph[fromIndex].AdjVertexList == nullptr) {
+                    // the first node is both the head and the tail
                     graph[fromIndex].AdjVertexList = newNode;
-                    continue;
+                    graph[fromIndex].AdjVertexTail = newNode;
                 }
                 else {
-                    VertexListNode* current = graph[fromIndex].AdjVertexList;
-                    while(current->next) {
-                        current = current->next;
-                    }
-                    current->next = newNode;
-                    // continue;
+                    // append through the tail pointer so each insert is constant time
+                    // adding at the end keeps the edges in file order
+                    graph[fromIndex].AdjVertexTail->next = newNode;
+                    graph[fromIndex].AdjVertexTail = newNode;
                 }
 
             }
@@ -287,7 +302,7 @@ class Graph {
 
                 VertexListNode* edge = graph[currentVertex].AdjVertexList; // this gets the head of the adjacency list for the current vertex
                 while(edge) {
-                    double weight = useFastestPath ? (edge->Distance / edge->SpeedLimit) : edge->Distance;
+                    double weight = useFastestPath ? (edge->Distance / edge->Speed) : edge->Distance;
                     double newDistance = currentDistance + weight; // currentDistance is the distance to the currentVertex. This weight is the distance from currentVertex to neighborIndex
                     if(newDistance < distances[edge->toIndex]) {
                         distances[edge->toIndex] = newDistance; // we update to the shorter distance
@@ -330,10 +345,10 @@ class Graph {
                 while(edge) {
                     
                     if(edge->toIndex == toVertex) {
-                        std::cout << " Take " << edge->Direction << " to " << edge->ToIntersectionName << " " << edge->Distance << std::endl;
-                        
+                        std::cout << " Take " << edge->Heading << " to " << graph[edge->toIndex].IntersectionName << " " << edge->Distance << std::endl;
+
                         totalDistance += edge->Distance;
-                        totalTime += edge->Distance / edge->SpeedLimit;
+                        totalTime += edge->Distance / edge->Speed;
                         break;
                     }
 

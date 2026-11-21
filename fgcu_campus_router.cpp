@@ -1,4 +1,6 @@
 #include <iostream>
+#include <iomanip> 
+#include <cmath>    
 #include <vector>
 #include <queue>
 #include <climits>
@@ -339,8 +341,11 @@ class Graph {
             double totalDistance = 0;
             double totalTime = 0;
 
+            const char* routeType = showTime ? "Fastest" : "Shortest";
+
+            // the destination was never reached so there is nothing to print
             if(distances[endIndex] == INT_MAX) {
-                std::cout << "No path found from " << graph[startIndex].IntersectionName << " to " << graph[endIndex].IntersectionName << std::endl;
+                std::cout << "No " << (showTime ? "fastest" : "shortest") << " route from " << graph[startIndex].IntersectionName << " to " << graph[endIndex].IntersectionName << std::endl;
                 return;
             }
 
@@ -354,20 +359,37 @@ class Graph {
 
             std::reverse(path.begin(), path.end());
 
-            std::cout << "From " << graph[startIndex].IntersectionName << std::endl;
-            
+            std::cout << routeType << " route, " << graph[startIndex].IntersectionName << " to " << graph[endIndex].IntersectionName << ":" << std::endl;
+
+            // find the longest from name on this route so the arrows line up
+            // the last vertex is never a from name so it is skipped
+            int nameWidth = 0;
+            for(int i = 0; i < (int)path.size() - 1; i++) {
+                int length = strlen(graph[path[i]].IntersectionName);
+                if(length > nameWidth) {
+                    nameWidth = length;
+                }
+            }
+
+            std::cout << std::fixed; // print a set number of decimals instead of the shortest form
+
             for(int i = 1; i < path.size(); i++) {
                 int fromVertex = path[i - 1];
                 int toVertex = path[i];
 
                 VertexListNode* edge = graph[fromVertex].AdjVertexList;
                 while(edge) {
-                    
+
                     if(edge->toIndex == toVertex) {
-                        std::cout << " Take " << edge->Heading << " to " << graph[edge->toIndex].IntersectionName << " " << edge->Distance << std::endl;
+                        // one leg in the order from then heading then distance then to
+                        // both names come from graph using the vertex indices
+                        std::cout << "  " << std::left << std::setw(nameWidth) << graph[fromVertex].IntersectionName
+                                  << "  " << std::setw(3) << edge->Heading
+                                  << std::right << std::setw(7) << std::setprecision(2) << edge->Distance << " m -> "
+                                  << graph[toVertex].IntersectionName << std::endl;
 
                         totalDistance += edge->Distance;
-                        totalTime += edge->Distance / edge->Speed;
+                        totalTime += edge->Distance / edge->Speed; // distance over speed is already seconds so no conversion
                         break;
                     }
 
@@ -375,9 +397,16 @@ class Graph {
                 }
             }
 
-            std::cout << "\nTotal distance: " << totalDistance << " miles" << std::endl;
-            std::cout << "Total time: " << (totalTime * 60) << " minutes" << std::endl;
-            std::cout << "Route priority: " << (showTime ? "Fastest Time" : "Shortest Distance") << std::endl;
+            // round first so the minutes and seconds add up
+            // lround rounds to the nearest whole second and returns an integer
+            long roundedSeconds = std::lround(totalTime);
+            long minutes = roundedSeconds / 60;
+            long seconds = roundedSeconds % 60;
+
+            std::cout << "Total distance: " << std::setprecision(2) << totalDistance << " m" << std::endl;
+            std::cout << "Total time: " << std::setprecision(1) << totalTime << " s (" << minutes << " min " << seconds << " s)" << std::endl;
+
+            std::cout << std::defaultfloat; // turn fixed back off so later output is not affected
         }
 
         // asks for a location until the name matches a known vertex

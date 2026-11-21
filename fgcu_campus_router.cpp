@@ -143,10 +143,14 @@ class Graph {
 
             while(left <= right) {
                 int mid = left + (right - left) / 2;
-                if(strcmp(graph[mid].IntersectionName, intersectionName) == 0) {
-                    return mid; 
+
+                // compare once and reuse the result
+                int cmp = strcmp(graph[mid].IntersectionName, intersectionName);
+
+                if(cmp == 0) {
+                    return mid;
                 }
-                else if(strcmp(graph[mid].IntersectionName, intersectionName) < 0) {
+                else if(cmp < 0) {
                     //remember strcmp returns negative if first string comes before second string alphabetically
                     left = mid + 1; // we move the left index to the right of mid. 
                 }
